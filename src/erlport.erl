@@ -238,7 +238,12 @@ call(Pid, Request, Timeout) ->
 %% @doc Handle incoming 'print' request
 %%
 print(Data, State) ->
-    ok = io:put_chars(Data),
+    try io:put_chars(Data) of
+        ok -> ok
+    catch
+        error:_ ->
+            io:format("Could not print requested data: ~p~n", [Data])
+    end,
     {noreply, State}.
 
 %%
