@@ -37,6 +37,7 @@ from struct import Struct
 from threading import Lock
 
 from erlport.erlterms import encode, decode
+from datadog import statsd
 
 
 class Port(object):
@@ -83,6 +84,7 @@ class Port(object):
             raise EOFError()
         return buf
 
+    @statsd.timed(__name__, tags=['method:read'])
     def read(self):
         """Read incoming message."""
         packet = self.packet
@@ -94,8 +96,10 @@ class Port(object):
             while len(buffer) < length:
                 buffer += self._read_data()
             term, self.__buffer = decode(buffer[packet:])
+            statsd.gauge(__name__+'.data_size', length, tags=['method:read'])
         return term
 
+    @statsd.timed(__name__, tags=['method:write'])
     def write(self, message):
         """Write outgoing message."""
         data = encode(message, compressed=self.compressed)
@@ -112,7 +116,9 @@ class Port(object):
                 if not n:
                     raise EOFError()
                 data = data[n:]
-        return length + self.packet
+        total = length + self.packet
+        statsd.gauge(__name__+'.data_size', total, tags=['method:write'])
+        return total
 
     def close(self):
         """Close port."""

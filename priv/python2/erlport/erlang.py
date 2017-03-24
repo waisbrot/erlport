@@ -35,6 +35,7 @@ from sys import exc_info
 from traceback import extract_tb
 from threading import Lock
 import uuid
+from datadog import statsd
 
 from erlport import Atom
 
@@ -72,6 +73,7 @@ class Responses(object):
         self.__responses = {}
         self.__lock = Lock()
 
+    @statsd.timed(__name__+'.Responses', tags=['method:get'])
     def get(self, response_id, default=None):
         with self.__lock:
             if response_id is None:
@@ -81,6 +83,7 @@ class Responses(object):
                 return self.__responses.pop(response_id)
         return default
 
+    @statsd.timed(__name__+'.Responses', tags=['method:put'])
     def put(self, response_id, message, default=None):
         if response_id is None:
             raise UnexpectedMessage(message)
@@ -158,6 +161,7 @@ class MessageHandler(object):
             except (IndexError, TypeError):
                 raise InvalidMessage(message)
 
+            statsd.increment(__name__+'MessageHandler', tags=['method:_receive', 'mtype:'+mtype])
             if mtype == "C":
                 try:
                     mid, module, function, args = message[1:]
@@ -180,11 +184,13 @@ class MessageHandler(object):
             else:
                 raise UnknownMessage(message)
 
+    @statsd.timed(__name__+'MessageHandler', tags=['method:cast'])
     def cast(self, pid, message):
         # It's safe to call it from multiple threads because port.write will be
         # locked
         self.port.write((Atom('M'), pid, message))
 
+    @statsd.timed(__name__+'MessageHandler', tags=['method:call'])
     def call(self, module, function, args):
         if not isinstance(module, Atom):
             raise ValueError(module)
@@ -219,6 +225,7 @@ class MessageHandler(object):
             raise UnknownMessage(response)
         return self.decoder(value)
 
+    @statsd.timed(__name__+'MessageHandler', tags=['method:_incoming_call'])
     def _incoming_call(self, mid, module, function, args):
         objects = function.split(".")
         f = sys.modules.get(module)
@@ -229,6 +236,7 @@ class MessageHandler(object):
         result = Atom("r"), mid, self.encoder(f(*map(self.decoder, args)))
         self.port.write(result)
 
+    @statsd.timed(__name__+'MessageHandler', tags=['method:_call_with_error_handler'])
     def _call_with_error_handler(self, mid, function, *args):
         try:
             function(*args)

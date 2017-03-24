@@ -37,6 +37,7 @@ from struct import Struct
 from array import array
 from zlib import decompressobj, compress
 from cPickle import loads, dumps
+from datadog import statsd
 
 
 # It seems protocol version 2 is supported by all Python versions
@@ -166,6 +167,7 @@ _double_bytes_unpack = Struct("BB").unpack
 _int4_byte_unpack = Struct(">IB").unpack
 
 
+@statsd.timed(__name__, tags=['function:decode'])
 def decode(string):
     """Decode Erlang external term."""
     if not string:
@@ -315,6 +317,7 @@ _char_float_pack = Struct(">cd").pack
 _char_2bytes_pack = Struct("cBB").pack
 _char_int4_byte_pack = Struct(">cIB").pack
 
+@statsd.timed(__name__, tags=['function:encode'])
 def encode(term, compressed=False):
     """Encode Erlang external term."""
     encoded_term = encode_term(term)
